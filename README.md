@@ -2,7 +2,9 @@
 
 [![CI](https://github.com/srinath-kothakapu/envsense-dashboard-fullstack/actions/workflows/ci.yml/badge.svg)](https://github.com/srinath-kothakapu/envsense-dashboard-fullstack/actions/workflows/ci.yml)
 
-A full-stack **environmental sensor monitoring** system: sensor nodes post readings to a **Node.js + TypeScript API** backed by **PostgreSQL**, and a **React + TypeScript** dashboard shows live charts, threshold alerts and CSV import/export. The whole stack runs with one command via **Docker Compose**, and **GitHub Actions** tests and builds everything.
+EnvSense is a full-stack **environmental sensor monitoring** system for collecting and exploring readings from multiple devices. Sensors or a simulator send temperature, humidity, pressure and CO₂ readings to a **Node.js + TypeScript API**; a **PostgreSQL** database stores the readings, and a **React + TypeScript** dashboard presents them as live, multi-device charts and statistics.
+
+The dashboard can run on its own with an in-browser simulator, or poll the API for persisted readings. Users can inspect threshold status, adjust limits, review edge-triggered alerts, and import or export readings as CSV. The API validates incoming data and supports device and time-range queries as well as hourly aggregates. **Docker Compose** starts the database, API, simulator and nginx-served dashboard together, making it straightforward to run the complete stack locally.
 
 ```
 sensors / simulator ──▶ API (Express, TS) ──▶ PostgreSQL
