@@ -1,13 +1,13 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { beforeAll, describe, expect, it } from 'vitest';
-import App from './App.jsx';
+import App from './App';
 
 beforeAll(() => {
   globalThis.ResizeObserver = class {
     observe() {}
     unobserve() {}
     disconnect() {}
-  };
+  } as unknown as typeof ResizeObserver;
 });
 
 describe('App', () => {

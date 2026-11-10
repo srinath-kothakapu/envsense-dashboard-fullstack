@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { createDevice, mulberry32 } from './simulator.js';
-import { DEFAULT_THRESHOLDS, statusOf } from './metrics.js';
-import { detectAlerts, evaluate, scanAlerts } from './alerts.js';
-import { parseCsv, toCsv } from './csv.js';
-import { mergeSeries, summarize } from './series.js';
+import { createDevice, mulberry32 } from './simulator';
+import { DEFAULT_THRESHOLDS, statusOf } from './metrics';
+import { detectAlerts, evaluate, scanAlerts } from './alerts';
+import { parseCsv, toCsv } from './csv';
+import { mergeSeries, summarize } from './series';
+import type { Reading, Series } from './types';
 
 describe('simulator', () => {
   it('is deterministic for a given seed', () => {
@@ -32,7 +33,7 @@ describe('simulator', () => {
 });
 
 describe('alerts', () => {
-  const ok = { timestamp: 1, device: 'a', temperature: 22, humidity: 40, pressure: 1010, co2: 500 };
+  const ok: Reading = { timestamp: 1, device: 'a', temperature: 22, humidity: 40, pressure: 1010, co2: 500 };
 
   it('flags high and low breaches', () => {
     const out = evaluate({ ...ok, temperature: 45, humidity: 10 }, DEFAULT_THRESHOLDS);
@@ -43,8 +44,8 @@ describe('alerts', () => {
   });
 
   it('only alerts on entering a breach, and re-arms after recovery', () => {
-    const active = new Set();
-    const hot = (t) => ({ ...ok, timestamp: t, temperature: 40 });
+    const active = new Set<string>();
+    const hot = (t: number) => ({ ...ok, timestamp: t, temperature: 40 });
     expect(detectAlerts(hot(1), DEFAULT_THRESHOLDS, active)).toHaveLength(1);
     expect(detectAlerts(hot(2), DEFAULT_THRESHOLDS, active)).toHaveLength(0);
     expect(detectAlerts({ ...ok, timestamp: 3 }, DEFAULT_THRESHOLDS, active)).toHaveLength(0);
@@ -70,7 +71,7 @@ describe('alerts', () => {
 
 describe('csv', () => {
   it('round-trips readings', () => {
-    const readings = [{ timestamp: 1700000000000, device: 'n1', temperature: 21.5, humidity: 40, pressure: 1012, co2: 600 }];
+    const readings: Reading[] = [{ timestamp: 1700000000000, device: 'n1', temperature: 21.5, humidity: 40, pressure: 1012, co2: 600 }];
     const parsed = parseCsv(toCsv(readings));
     expect(parsed.errors).toEqual([]);
     expect(parsed.readings).toEqual(readings);
@@ -94,7 +95,7 @@ describe('csv', () => {
 });
 
 describe('series', () => {
-  const series = {
+  const series: Series = {
     a: [{ timestamp: 1, device: 'a', temperature: 10 }, { timestamp: 2, device: 'a', temperature: 20 }],
     b: [{ timestamp: 2, device: 'b', temperature: 30 }],
   };

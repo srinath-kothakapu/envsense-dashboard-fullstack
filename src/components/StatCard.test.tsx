@@ -1,6 +1,6 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import StatCard from './StatCard.jsx';
+import StatCard from './StatCard';
 
 const stats = { latest: 35.2, min: 20, max: 36, avg: 27 };
 

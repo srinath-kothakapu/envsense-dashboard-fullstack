@@ -1,17 +1,18 @@
-import { useMemo, useRef, useState } from 'react';
-import StatCard from './components/StatCard.jsx';
-import TelemetryChart from './components/TelemetryChart.jsx';
-import AlertsPanel from './components/AlertsPanel.jsx';
-import ThresholdEditor from './components/ThresholdEditor.jsx';
-import { useTelemetry } from './hooks/useTelemetry.js';
-import { DEFAULT_THRESHOLDS, METRIC_KEYS } from './lib/metrics.js';
-import { DEVICES } from './lib/simulator.js';
-import { parseCsv, toCsv } from './lib/csv.js';
-import { flatten, summarize } from './lib/series.js';
+import { useMemo, useRef, useState, type ChangeEvent } from 'react';
+import StatCard from './components/StatCard';
+import TelemetryChart from './components/TelemetryChart';
+import AlertsPanel from './components/AlertsPanel';
+import ThresholdEditor from './components/ThresholdEditor';
+import { useTelemetry } from './hooks/useTelemetry';
+import { DEFAULT_THRESHOLDS, METRIC_KEYS } from './lib/metrics';
+import { DEVICES } from './lib/simulator';
+import { parseCsv, toCsv } from './lib/csv';
+import { flatten, summarize } from './lib/series';
+import type { Device, MetricKey, Thresholds } from './lib/types';
 
 const PALETTE = ['#22d3ee', '#f472b6', '#a3e635', '#fbbf24', '#c084fc', '#fb923c'];
 
-function download(filename, text) {
+function download(filename: string, text: string) {
   const url = URL.createObjectURL(new Blob([text], { type: 'text/csv' }));
   const a = Object.assign(document.createElement('a'), { href: url, download: filename });
   a.click();
@@ -19,26 +20,32 @@ function download(filename, text) {
 }
 
 export default function App() {
-  const [thresholds, setThresholds] = useState(DEFAULT_THRESHOLDS);
-  const [metric, setMetric] = useState('temperature');
-  const [selectedDevice, setSelectedDevice] = useState(DEVICES[0].id);
-  const [importErrors, setImportErrors] = useState([]);
-  const fileRef = useRef(null);
+  const [thresholds, setThresholds] = useState<Thresholds>(DEFAULT_THRESHOLDS);
+  const [metric, setMetric] = useState<MetricKey>('temperature');
+  const [selectedDevice, setSelectedDevice] = useState<string>(DEVICES[0].id);
+  const [importErrors, setImportErrors] = useState<string[]>([]);
+  const fileRef = useRef<HTMLInputElement>(null);
 
-  const { series, alerts, paused, setPaused, source, importReadings, backToLive, clearAlerts } =
+  const { series, alerts, paused, setPaused, source, mode, error, importReadings, backToLive, clearAlerts } =
     useTelemetry({ thresholds });
 
-  // Device list: simulated nodes in live mode, whatever the CSV contained otherwise.
-  const devices = useMemo(() => {
-    if (source === 'live') return DEVICES;
-    return Object.keys(series).map((id, i) => ({ id, name: id, color: PALETTE[i % PALETTE.length] }));
-  }, [source, series]);
+  // Devices come from whatever data we have (simulator, API or CSV); known nodes keep their name/colour.
+  const deviceIds = Object.keys(series).join('|');
+  const devices: Device[] = useMemo(
+    () =>
+      deviceIds
+        .split('|')
+        .filter(Boolean)
+        .sort()
+        .map((id, i) => DEVICES.find((d) => d.id === id) ?? { id, name: id, color: PALETTE[i % PALETTE.length] }),
+    [deviceIds]
+  );
 
   const activeId = devices.some((d) => d.id === selectedDevice) ? selectedDevice : devices[0]?.id;
   const stats = useMemo(() => summarize(series[activeId] ?? []), [series, activeId]);
-  const nameOf = (id) => devices.find((d) => d.id === id)?.name ?? id;
+  const nameOf = (id: string) => devices.find((d) => d.id === id)?.name ?? id;
 
-  const onFile = async (e) => {
+  const onFile = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
@@ -49,6 +56,9 @@ export default function App() {
       setSelectedDevice(readings[0].device);
     }
   };
+
+  const statusLabel =
+    source === 'imported' ? 'Imported data' : paused ? 'Paused' : mode === 'api' ? 'Live · API' : 'Live · simulated';
 
   return (
     <div className="app">
@@ -62,9 +72,7 @@ export default function App() {
           </h1>
           <p className="subtitle">
             Environmental sensor monitoring ·{' '}
-            <span className={`pill ${source === 'live' && !paused ? 'live' : ''}`}>
-              {source === 'imported' ? 'Imported data' : paused ? 'Paused' : 'Live'}
-            </span>
+            <span className={`pill ${source === 'live' && !paused && !error ? 'live' : ''}`}>{statusLabel}</span>
           </p>
         </div>
         <div className="actions">
@@ -91,8 +99,9 @@ export default function App() {
         </div>
       </header>
 
-      {importErrors.length > 0 && (
+      {(importErrors.length > 0 || error) && (
         <div className="notice" role="alert">
+          {error && <div>Cannot reach the API: {error}. Retrying…</div>}
           {importErrors.map((err) => (
             <div key={err}>{err}</div>
           ))}
@@ -100,12 +109,13 @@ export default function App() {
       )}
 
       <nav className="device-tabs" aria-label="Devices">
+        {devices.length === 0 && <span className="empty">Waiting for data…</span>}
         {devices.map((d) => (
           <button
             key={d.id}
             type="button"
             className={`tab ${d.id === activeId ? 'active' : ''}`}
-            style={{ '--dot': d.color }}
+            style={{ '--dot': d.color } as React.CSSProperties}
             onClick={() => setSelectedDevice(d.id)}
           >
             <i /> {d.name}

@@ -1,7 +1,8 @@
 // Deterministic sensor simulator: mean-reverting random walks with occasional spikes.
-// Stands in for real hardware (e.g. an STM32 node publishing over serial/MQTT).
+// Used for offline/demo mode. (The API ships its own copy for the data-generator service.)
+import type { Device, MetricKey, Reading } from './types';
 
-export function mulberry32(seed) {
+export function mulberry32(seed: number): () => number {
   let a = seed >>> 0;
   return () => {
     a = (a + 0x6d2b79f5) >>> 0;
@@ -12,39 +13,47 @@ export function mulberry32(seed) {
   };
 }
 
-export const DEVICES = [
+export const DEVICES: Device[] = [
   { id: 'node-01', name: 'Lab Bench', color: '#22d3ee' },
   { id: 'node-02', name: 'Server Room', color: '#f472b6' },
   { id: 'node-03', name: 'Vehicle Cabin', color: '#a3e635' },
 ];
 
-const BASE = {
+type Values = Record<MetricKey, number>;
+
+const BASE: Record<string, Values> = {
   'node-01': { temperature: 23, humidity: 45, pressure: 1013, co2: 550 },
   'node-02': { temperature: 27, humidity: 35, pressure: 1011, co2: 700 },
   'node-03': { temperature: 21, humidity: 55, pressure: 1009, co2: 850 },
 };
 
-const STEP = { temperature: 0.25, humidity: 0.8, pressure: 0.3, co2: 18 };
-const LIMITS = {
+const STEP: Values = { temperature: 0.25, humidity: 0.8, pressure: 0.3, co2: 18 };
+const LIMITS: Record<MetricKey, [number, number]> = {
   temperature: [-10, 60],
   humidity: [5, 99],
   pressure: [900, 1100],
   co2: [380, 5000],
 };
-const SPIKE = { temperature: 7, humidity: 18, pressure: -25, co2: 600 };
+const SPIKE: Values = { temperature: 7, humidity: 18, pressure: -25, co2: 600 };
 
-const clamp = (v, [lo, hi]) => Math.min(hi, Math.max(lo, v));
+const clamp = (v: number, [lo, hi]: [number, number]) => Math.min(hi, Math.max(lo, v));
 
-export function createDevice(id, seed = 1, spikeChance = 0.015) {
+export interface SimDevice {
+  id: string;
+  next(timestamp: number): Reading;
+}
+
+export function createDevice(id: string, seed = 1, spikeChance = 0.015): SimDevice {
   const rand = mulberry32(seed);
   const base = BASE[id] ?? BASE['node-01'];
-  const state = { ...base };
+  const state: Values = { ...base };
+  const keys = Object.keys(base) as MetricKey[];
 
   return {
     id,
     next(timestamp) {
-      const reading = { timestamp, device: id };
-      for (const key of Object.keys(base)) {
+      const reading: Reading = { timestamp, device: id };
+      for (const key of keys) {
         const noise = (rand() - 0.5) * 2 * STEP[key];
         const pull = (base[key] - state[key]) * 0.06;
         let v = state[key] + noise + pull;

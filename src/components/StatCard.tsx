@@ -1,6 +1,15 @@
-import { METRICS, formatValue, statusOf } from '../lib/metrics.js';
+import { METRICS, formatValue, statusOf } from '../lib/metrics';
+import type { MetricKey, MetricStats, Threshold } from '../lib/types';
 
-export default function StatCard({ metric, stats, threshold, selected, onSelect }) {
+interface Props {
+  metric: MetricKey;
+  stats: MetricStats | null | undefined;
+  threshold: Threshold;
+  selected?: boolean;
+  onSelect: (metric: MetricKey) => void;
+}
+
+export default function StatCard({ metric, stats, threshold, selected = false, onSelect }: Props) {
   const { label, unit } = METRICS[metric];
   const status = statusOf(stats?.latest, threshold);
 

@@ -1,7 +1,13 @@
-import { DEFAULT_THRESHOLDS, METRIC_KEYS, METRICS } from '../lib/metrics.js';
+import { DEFAULT_THRESHOLDS, METRIC_KEYS, METRICS } from '../lib/metrics';
+import type { MetricKey, Thresholds } from '../lib/types';
 
-export default function ThresholdEditor({ thresholds, onChange }) {
-  const update = (metric, field, raw) => {
+interface Props {
+  thresholds: Thresholds;
+  onChange: (next: Thresholds) => void;
+}
+
+export default function ThresholdEditor({ thresholds, onChange }: Props) {
+  const update = (metric: MetricKey, field: 'min' | 'max', raw: string) => {
     const value = Number(raw);
     if (raw === '' || Number.isNaN(value)) return;
     onChange({ ...thresholds, [metric]: { ...thresholds[metric], [field]: value } });

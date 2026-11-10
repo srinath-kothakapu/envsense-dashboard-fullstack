@@ -1,6 +1,13 @@
-import { METRICS, formatValue } from '../lib/metrics.js';
+import { METRICS, formatValue } from '../lib/metrics';
+import type { AlertEvent } from '../lib/types';
 
-export default function AlertsPanel({ alerts, deviceName, onClear }) {
+interface Props {
+  alerts: AlertEvent[];
+  deviceName: (id: string) => string;
+  onClear: () => void;
+}
+
+export default function AlertsPanel({ alerts, deviceName, onClear }: Props) {
   return (
     <section className="card alerts" aria-label="Alerts">
       <div className="panel-head">

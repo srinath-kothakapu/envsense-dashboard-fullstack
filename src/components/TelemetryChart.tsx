@@ -10,12 +10,20 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { METRICS, formatValue } from '../lib/metrics.js';
-import { mergeSeries } from '../lib/series.js';
+import { METRICS, formatValue } from '../lib/metrics';
+import { mergeSeries } from '../lib/series';
+import type { Device, MetricKey, Series, Threshold } from '../lib/types';
 
-const time = (ts) => new Date(ts).toLocaleTimeString([], { hour12: false });
+const time = (ts: number | string) => new Date(Number(ts)).toLocaleTimeString([], { hour12: false });
 
-export default function TelemetryChart({ series, metric, threshold, devices }) {
+interface Props {
+  series: Series;
+  metric: MetricKey;
+  threshold: Threshold;
+  devices: Device[];
+}
+
+export default function TelemetryChart({ series, metric, threshold, devices }: Props) {
   const data = useMemo(() => mergeSeries(series, metric), [series, metric]);
   const { label, unit } = METRICS[metric];
 
@@ -32,16 +40,12 @@ export default function TelemetryChart({ series, metric, threshold, devices }) {
             <YAxis stroke="#64748b" domain={['auto', 'auto']} width={48} />
             <Tooltip
               contentStyle={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 8 }}
-              labelFormatter={time}
-              formatter={(v, name) => [`${formatValue(metric, v)} ${unit}`, name]}
+              labelFormatter={(label) => time(label as number)}
+              formatter={(v, name) => [`${formatValue(metric, Number(v))} ${unit}`, String(name)]}
             />
             <Legend />
-            {threshold && (
-              <>
-                <ReferenceLine y={threshold.max} stroke="#f87171" strokeDasharray="6 4" label="max" />
-                <ReferenceLine y={threshold.min} stroke="#fbbf24" strokeDasharray="6 4" label="min" />
-              </>
-            )}
+            <ReferenceLine y={threshold.max} stroke="#f87171" strokeDasharray="6 4" label="max" />
+            <ReferenceLine y={threshold.min} stroke="#fbbf24" strokeDasharray="6 4" label="min" />
             {devices.map((d) => (
               <Line
                 key={d.id}

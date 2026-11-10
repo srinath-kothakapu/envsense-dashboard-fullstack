@@ -1,8 +1,16 @@
-import { METRIC_KEYS } from './metrics.js';
+import { METRIC_KEYS } from './metrics';
+import type { AlertEvent, MetricKey, Reading, Thresholds } from './types';
+
+export interface Breach {
+  metric: MetricKey;
+  value: number;
+  level: 'high' | 'low';
+  limit: number;
+}
 
 /** All threshold breaches present in a single reading. */
-export function evaluate(reading, thresholds) {
-  const out = [];
+export function evaluate(reading: Reading, thresholds: Thresholds): Breach[] {
+  const out: Breach[] = [];
   for (const metric of METRIC_KEYS) {
     const value = reading[metric];
     const t = thresholds[metric];
@@ -18,9 +26,9 @@ export function evaluate(reading, thresholds) {
  * not on every sample while it stays out of range. `active` is a Set that
  * tracks ongoing breaches and is mutated in place.
  */
-export function detectAlerts(reading, thresholds, active) {
-  const events = [];
-  const current = new Set();
+export function detectAlerts(reading: Reading, thresholds: Thresholds, active: Set<string>): AlertEvent[] {
+  const events: AlertEvent[] = [];
+  const current = new Set<string>();
 
   for (const b of evaluate(reading, thresholds)) {
     const key = `${reading.device}:${b.metric}`;
@@ -44,7 +52,7 @@ export function detectAlerts(reading, thresholds, active) {
 }
 
 /** Run edge-triggered detection across a batch of readings (e.g. an imported CSV). */
-export function scanAlerts(readings, thresholds) {
-  const active = new Set();
+export function scanAlerts(readings: Reading[], thresholds: Thresholds): AlertEvent[] {
+  const active = new Set<string>();
   return readings.flatMap((r) => detectAlerts(r, thresholds, active));
 }
