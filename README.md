@@ -1,6 +1,6 @@
 # EnvSense
 
-[![CI](https://github.com/srinath-kothakapu/envsense-dashboard/actions/workflows/ci.yml/badge.svg)](https://github.com/srinath-kothakapu/envsense-dashboard/actions/workflows/ci.yml)
+[![CI](https://github.com/srinath-kothakapu/envsense-dashboard-fullstack/actions/workflows/ci.yml/badge.svg)](https://github.com/srinath-kothakapu/envsense-dashboard-fullstack/actions/workflows/ci.yml)
 
 A full-stack **environmental sensor monitoring** system: sensor nodes post readings to a **Node.js + TypeScript API** backed by **PostgreSQL**, and a **React + TypeScript** dashboard shows live charts, threshold alerts and CSV import/export. The whole stack runs with one command via **Docker Compose**, and **GitHub Actions** tests and builds everything.
 
