@@ -16,7 +16,6 @@
     "start:simulate": "node dist/simulate.js",
     "test": "vitest run"
   },
-  "license": "MIT",
   "dependencies": {
     "express": "^5.3.0",
     "pg": "^8.23.1"
