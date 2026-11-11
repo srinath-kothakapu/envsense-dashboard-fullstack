@@ -198,6 +198,3 @@ Do not put sensitive sensor data into an internet-accessible deployment without 
 
 [`docs/DESIGN.md`](docs/DESIGN.md) records important implementation choices, including polling versus WebSockets, browser-side alerts, PostgreSQL indexing, bulk insertion, timestamp handling, and current trade-offs.
 
-## License
-
-This project is distributed under the MIT License. See [`LICENSE`](LICENSE).
