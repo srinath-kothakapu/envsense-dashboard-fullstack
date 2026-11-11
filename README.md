@@ -1,92 +1,203 @@
-# EnvSense
+# EnvSense Full Stack
 
-[![CI](https://github.com/srinath-kothakapu/envsense-dashboard-fullstack/actions/workflows/ci.yml/badge.svg)](https://github.com/srinath-kothakapu/envsense-dashboard-fullstack/actions/workflows/ci.yml)
+EnvSense Full Stack is a local, end-to-end environmental telemetry application. It collects readings from sensor nodes (or a built-in simulator), validates and stores them in PostgreSQL through a Node.js/TypeScript REST API, and presents the history in a React/TypeScript dashboard.
 
-EnvSense is a full-stack **environmental sensor monitoring** system for collecting and exploring readings from multiple devices. Sensors or a simulator send temperature, humidity, pressure and CO₂ readings to a **Node.js + TypeScript API**; a **PostgreSQL** database stores the readings, and a **React + TypeScript** dashboard presents them as live, multi-device charts and statistics.
+Unlike the standalone [`envsense-dashboard`](https://github.com/srinath-kothakapu/envsense-dashboard), this version demonstrates the complete data path: a simulated fleet produces readings, an API accepts and persists them, the dashboard polls for updates, and PostgreSQL supplies device lists, time-series data, and hourly summaries. Docker Compose starts the full stack so it can be explored without physical sensors.
 
-The dashboard can run on its own with an in-browser simulator, or poll the API for persisted readings. Users can inspect threshold status, adjust limits, review edge-triggered alerts, and import or export readings as CSV. The API validates incoming data and supports device and time-range queries as well as hourly aggregates. **Docker Compose** starts the database, API, simulator and nginx-served dashboard together, making it straightforward to run the complete stack locally.
+## At a glance
 
+| Layer | Technology | Responsibility |
+|---|---|---|
+| Web UI | React, TypeScript, Vite, Recharts | Live and historical charts, status cards, thresholds, alerts, CSV tools |
+| Web server | nginx | Serves the compiled frontend and proxies `/api` requests |
+| API | Node.js 22+, Express 5, TypeScript | Validates, stores, and queries sensor readings |
+| Database | PostgreSQL 16 | Persists timestamped readings and supports time-window queries |
+| Data producer | Node.js/TypeScript simulator | Sends one-second readings for three virtual nodes |
+| Local orchestration | Docker Compose | Starts and health-checks the four services |
+
+## Architecture
+
+```text
+Virtual sensors or real-device adapter
+                  │  POST /api/readings
+                  ▼
+       Express + TypeScript API ─────► PostgreSQL
+                  ▲                      │
+                  │ GET /api/*            │ stored readings / aggregates
+             nginx reverse proxy         │
+                  ▲                      │
+                  └──── React dashboard ◄┘
 ```
-sensors / simulator ──▶ API (Express, TS) ──▶ PostgreSQL
-                          ▲
-browser ──▶ nginx (React app) ── /api ──┘
-```
 
-## Run it
-
-### Everything in Docker (recommended)
-```bash
-docker compose up --build
-# dashboard: http://localhost:8080      API: http://localhost:3001/api/health
-```
-This starts Postgres, the API, a sensor simulator (3 virtual nodes, 1 reading/s each) and the nginx-served dashboard. Optionally copy `.env.example` to `.env` to set the database password. Stop with `docker compose down` (add `-v` to also delete stored data).
-
-### Local development
-```bash
-# 1) frontend only, using the in-browser simulator (no backend needed)
-npm install
-npm run dev                      # http://localhost:5173
-
-# 2) frontend + real API
-docker compose up -d db          # just Postgres  (or use any Postgres you have)
-cd api && npm install
-DATABASE_URL=postgres://envsense:envsense@localhost:5432/envsense npm run dev   # API on :3001
-npm run simulate                 # in a 2nd terminal: fake sensor data -> API
-cd .. && VITE_USE_API=true npm run dev   # dashboard proxies /api to :3001
-```
-Note: in compose the database port is not published; add `ports: ["5432:5432"]` to the `db` service for option 2.
+Compose defines four services: `db`, `api`, `simulator`, and `web`. The database health check gates API startup; the simulator waits for the API health check; and the web container serves the static application through nginx. In the complete stack, the browser uses the same-site `/api` path that nginx proxies to the API.
 
 ## Features
-- **Live multi-device charts** with min/max threshold lines (Recharts)
-- **Stat cards**: latest value, window min/avg/max, in-range / too high / too low
-- **Edge-triggered alerts** (one alert when a metric enters a breach, not one per sample) with **editable thresholds**
-- **CSV import / export** (see `sample-data/sample-readings.csv`)
-- **REST API** with input validation, bulk insert, time-range queries and hourly SQL aggregates
-- **Resilient UI**: shows "cannot reach API" and recovers automatically
 
-## API
+- **Persistent multi-device telemetry.** Readings include a device name, timestamp, and one or more of temperature, humidity, pressure, and CO2. PostgreSQL stores the data in a timestamped readings table with device/time indexes.
+- **A data simulator.** The background producer sends readings for three virtual sensor nodes at a configurable interval. It is a stand-in for hardware, not a real measurement source.
+- **Incremental dashboard updates.** The UI polls the API periodically using a timestamp cursor and appends new readings to the visible series.
+- **Charts and summaries.** Per-device time series and metric cards make current values and recent ranges easy to compare.
+- **Threshold alerts.** The browser emits a single alert when a metric enters a breach, and rearms that alert when readings recover. The threshold configuration is UI state; alert records are not persisted by the API.
+- **CSV workflow.** The dashboard can import and export readings in CSV form. It can also be run in browser-simulator mode without the API.
+- **Query API.** Readings can be filtered by device and time range; the service also exposes device summaries and hourly aggregates computed in SQL.
+- **Automated checks.** Frontend and API unit/HTTP tests are supplemented by PostgreSQL integration tests and a Compose smoke test in GitHub Actions.
 
-| Method & path | Description |
-| --- | --- |
-| `POST /api/readings` | One reading or an array (max 1000). Body: `{ device, timestamp?, temperature?, humidity?, pressure?, co2? }`. `timestamp` = epoch ms or ISO string (default: now). At least one metric required. All-or-nothing. → `201 {inserted}` |
-| `GET /api/readings?from=&to=&device=&limit=` | Readings oldest-first. `from`/`to` = epoch ms or ISO. `limit` 1–10000 (default 1000) |
-| `GET /api/devices` | Devices with reading count and last-seen time |
-| `GET /api/stats/hourly?hours=24&device=` | Hourly avg/min/max per device and metric, computed in SQL |
-| `GET /api/health` | `200` if the database answers, else `503` |
+## Run the full application
+
+### Requirements
+
+- Docker and Docker Compose v2
+- A free local port 8080 for the dashboard and 3001 for the API
+
+### Start
+
+From the repository root:
 
 ```bash
-curl -X POST localhost:3001/api/readings -H 'Content-Type: application/json' \
-  -d '{"device":"my-stm32","temperature":23.4,"humidity":41,"co2":612}'
+git clone https://github.com/srinath-kothakapu/envsense-dashboard-fullstack.git
+cd envsense-dashboard-fullstack
+docker compose up --build
 ```
 
-Schema: [`api/sql/schema.sql`](api/sql/schema.sql) (applied automatically on API start).
+Open the dashboard at [http://localhost:8080](http://localhost:8080). Check the API at [http://localhost:3001/api/health](http://localhost:3001/api/health). The Compose stack starts PostgreSQL, the API, the simulator, and the nginx-served dashboard; the simulator begins posting readings once the API is healthy.
+
+Stop the services and keep the database volume:
+
+```bash
+docker compose down
+```
+
+To also delete the locally persisted database data:
+
+```bash
+docker compose down -v
+```
+
+The `-v` option is destructive to the named Compose database volume. Use it only when you intend to discard the stored readings.
+
+### Local frontend development
+
+The React application can run separately using its in-browser simulator, without Docker or a database:
+
+```bash
+npm install
+npm run dev
+```
+
+Open [http://localhost:5173](http://localhost:5173). To use the API instead, the API and a PostgreSQL instance must be available; see the service configuration in [`docker-compose.yml`](docker-compose.yml), the API package scripts, and [`docs/DESIGN.md`](docs/DESIGN.md). The Compose example is the simplest way to supply the required services together.
+
+## API reference
+
+The API listens on port `3001` in the Compose configuration. JSON request bodies are limited to 1 MB. Readings are validated before storage; a batch is accepted as a whole or rejected as a whole.
+
+### `POST /api/readings`
+
+Submit one reading or an array of up to 1,000 readings. Every reading has a `device` and may include a `timestamp` (ISO date/time or epoch milliseconds) and one or more measurement fields. When omitted, the timestamp is set to the current time. Invalid rows are rejected rather than partially inserted.
+
+```bash
+curl -X POST http://localhost:3001/api/readings \
+  -H "Content-Type: application/json" \
+  -d '{"device":"my-sensor","temperature":23.4,"humidity":41,"co2":612}'
+```
+
+A successful request returns HTTP `201` with the number of inserted readings:
+
+```json
+{"inserted":1}
+```
+
+### `GET /api/readings`
+
+Return readings in chronological order. Optional parameters:
+
+| Parameter | Meaning |
+|---|---|
+| `from` | Inclusive start time; ISO date/time or epoch milliseconds |
+| `to` | End of requested time range; ISO date/time or epoch milliseconds |
+| `device` | Restrict results to a device name |
+| `limit` | Maximum rows, from 1 to 10,000; defaults to 1,000 |
+
+Example: `GET /api/readings?device=node-01&from=2026-03-20T10:00:00Z&limit=100`
+
+### `GET /api/devices`
+
+List known devices with their reading counts and most recent reading time.
+
+### `GET /api/stats/hourly`
+
+Return per-device, per-metric hourly averages and ranges over a recent period. `hours` defaults to 24 and is limited to 90 days; `device` is optional.
+
+### `GET /api/health`
+
+Returns HTTP `200` with `{"status":"ok"}` when the database responds, and HTTP `503` when it does not.
+
+## Data model and operational behavior
+
+The database stores each reading as a timestamp plus a device and the available metric values. PostgreSQL constraints ensure a row contains at least one measurement; the API applies its own validation before attempting a write. A batch uses one parameterized bulk insert, so it is handled in one database round trip.
+
+The dashboard polls approximately once per second and resumes from a timestamp cursor. This is intentionally simple for a small demo stack. There can be up to a poll interval of display latency; a late-arriving reading whose timestamp is older than the last cursor can be missed by incremental polling. For higher-volume or delayed data, a monotonic ingestion ID or a streaming mechanism would be a more suitable cursor.
+
+Alerts are evaluated in the browser because the thresholds are part of the current UI session. They are not written to PostgreSQL, delivered when the dashboard is closed, or sent to external notification services.
 
 ## Tests and CI
+
+The frontend and API are separate Node projects. Node.js **22 or newer** is required for the API.
+
 ```bash
-npm test                 # frontend: unit + component + hook tests (Vitest, Testing Library)
+# Frontend (repository root)
+npm ci
 npm run typecheck
-cd api && npm test       # API: HTTP tests; add TEST_DATABASE_URL to also run the Postgres integration tests
-TEST_DATABASE_URL=postgres://postgres:postgres@localhost:5432/envsense_test npm test
-```
-GitHub Actions (`.github/workflows/ci.yml`) runs three jobs: **web** (typecheck, tests, build), **api** (typecheck, tests against a Postgres service container, build) and **docker** (builds the images, starts the compose stack, smoke-tests it through the nginx proxy).
+npm test
+npm run build
 
-## Project structure
-```
-src/                 React + TypeScript dashboard
-  lib/               pure logic: alerts, csv, series, simulator, api client (unit-tested)
-  hooks/             useTelemetry: simulator or API polling, rolling window, alerts
-  components/        StatCard, TelemetryChart, AlertsPanel, ThresholdEditor
-api/                 Node + Express + TypeScript service
-  src/               app (routes), validate, pgStore, memoryStore, server, simulate
-  sql/schema.sql     table + indexes + constraints
-docs/DESIGN.md       architecture decisions, trade-offs and limitations
-Dockerfile, nginx.conf, docker-compose.yml, .github/workflows/ci.yml
+# API
+cd api
+npm ci
+npm run typecheck
+npm test
+npm run build
 ```
 
-## Connecting real hardware
-Any device that can send HTTP can `POST /api/readings` (an ESP32 directly; an STM32 via a gateway such as a Raspberry Pi or an ESP-AT module). Replace the `simulator` service with your gateway.
+The API tests include HTTP tests with an in-memory store. PostgreSQL integration tests need a real test database configured through `TEST_DATABASE_URL`; GitHub Actions runs those tests against a PostgreSQL service container. The CI workflow also builds the Docker images, starts the Compose stack, and checks that the application responds through nginx.
 
-## Tech stack
-React 19 · TypeScript · Vite · Recharts · Node.js 22 · Express 5 · PostgreSQL 16 · Docker / Compose · nginx · Vitest · GitHub Actions
+## Repository structure
 
-See [`docs/DESIGN.md`](docs/DESIGN.md) for design decisions and trade-offs. Licensed under MIT.
+```text
+src/                     React + TypeScript dashboard
+  hooks/                 Telemetry source, polling, alert and rolling-window state
+  components/            Cards, charts, alert panel and threshold controls
+  lib/                   CSV, metrics, series, simulator and API client
+api/
+  src/app.ts              Express routes and HTTP validation
+  src/validate.ts         Reading and query validation
+  src/pgStore.ts          PostgreSQL-backed store
+  src/memoryStore.ts      Lightweight store for HTTP tests
+  src/simulate.ts         Virtual sensor producer
+  sql/schema.sql          Table, constraints and indexes
+  src/*.test.ts           API and data-store tests
+docs/DESIGN.md            Architecture decisions, trade-offs and limits
+docker-compose.yml        Database, API, simulator and web services
+Dockerfile, nginx.conf    Web image and reverse-proxy configuration
+sample-data/              CSV example for import
+```
+
+## Security and deployment limitations
+
+This repository is intended for local development and demonstration, not as a ready-to-deploy public sensor service.
+
+- The API has **no authentication, authorization, or rate limiting**. Anyone who can reach it can submit and query readings.
+- CORS is deliberately permissive for development. Restrict allowed origins before exposing an API outside a trusted local environment.
+- Compose uses a simple fallback database password for local convenience. Set `POSTGRES_PASSWORD` to a strong secret in any shared environment and never commit real credentials.
+- The API and simulator use local HTTP in the Compose network; TLS, device identity, and per-device authorization are not configured.
+- There is no data-retention policy, backup strategy, production secrets manager, or high-availability setup.
+- Browser-side alerts are not persistent operational notifications.
+
+Do not put sensitive sensor data into an internet-accessible deployment without adding appropriate access controls, secure transport, retention, and monitoring.
+
+## Further documentation
+
+[`docs/DESIGN.md`](docs/DESIGN.md) records important implementation choices, including polling versus WebSockets, browser-side alerts, PostgreSQL indexing, bulk insertion, timestamp handling, and current trade-offs.
+
+## License
+
+This project is distributed under the MIT License. See [`LICENSE`](LICENSE).
